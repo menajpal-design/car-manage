@@ -1,0 +1,40 @@
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+
+/**
+ * Custom API client using native fetch.
+ * Configured with `credentials: 'include'` so HTTP-only cookies are sent and received correctly.
+ */
+export async function apiRequest(path: string, options: RequestInit = {}) {
+  const url = `${BASE_URL}${path}`;
+  
+  const headers = new Headers(options.headers);
+  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const mergedOptions: RequestInit = {
+    ...options,
+    headers,
+    credentials: 'include', // Crucial for HTTP-only cookies
+  };
+
+  const response = await fetch(url, mergedOptions);
+
+  if (!response.ok) {
+    let errorMsg = 'An unexpected error occurred';
+    try {
+      const data = await response.json();
+      errorMsg = data.message || errorMsg;
+    } catch {
+      // JSON parsing failed
+    }
+    throw new Error(errorMsg);
+  }
+
+  // Handle logout or empty responses
+  if (response.status === 204) {
+    return null;
+  }
+
+  return response.json();
+}

@@ -1,0 +1,44 @@
+{
+  "name": "FleetMaster Pro",
+  "short_name": "FleetMaster",
+  "description": "Enterprise Fleet Management — Vehicles, Tickets, Fuel, Payments & Analytics",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity", "utilities"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Ticket Board",
+      "short_name": "Tickets",
+      "description": "Open Kanban Ticket Board",
+      "url": "/dashboard/tickets",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Log Fuel",
+      "short_name": "Fuel",
+      "description": "Open Fuel Tracking",
+      "url": "/dashboard/fuel",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

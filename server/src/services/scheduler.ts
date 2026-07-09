@@ -1,0 +1,196 @@
+import { Vehicle } from '../models/Vehicle';
+import { User } from '../models/User';
+import { Ticket } from '../models/Ticket';
+import { sendSMS } from './sms';
+import { SocketEvent, TicketType, TicketStatus } from '@fleetmaster/shared';
+
+// Global Socket Server reference to emit alerts
+let socketServer: any = null;
+
+export const setSocketServerForScheduler = (io: any) => {
+  socketServer = io;
+};
+
+/**
+ * Scans all vehicle documents expiring within the next 7 days and triggers alerts.
+ */
+export const runExpiryChecks = async (): Promise<void> => {
+  console.log('[Scheduler] Executing vehicle document expiry scans...');
+
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const sevenDaysFromNow = new Date();
+    sevenDaysFromNow.setDate(today.getDate() + 7);
+    sevenDaysFromNow.setHours(23, 59, 59, 999);
+
+    const vehicles = await Vehicle.find();
+    let alertCount = 0;
+
+    for (const vehicle of vehicles) {
+      for (const doc of vehicle.documents) {
+        const expiry = new Date(doc.expiryDate);
+
+        // Check if expiry date falls within the next 7 days
+        if (expiry >= today && expiry <= sevenDaysFromNow) {
+          alertCount++;
+          const timeDiff = expiry.getTime() - new Date().getTime();
+          const daysLeft = Math.max(0, Math.ceil(timeDiff / (1000 * 60 * 60 * 24)));
+          
+          const alertMessage = `ALERT: Document "${doc.type}" for Vehicle ${vehicle.regNumber} is expiring in ${daysLeft} days (Expiry: ${expiry.toLocaleDateString()}).`;
+          console.log(`[Scheduler] [EXPIRE ALERT] ${alertMessage}`);
+
+          // 1. Emit Socket.io in-app alert notification
+          if (socketServer) {
+            socketServer.emit(SocketEvent.NOTIFICATION, {
+              type: 'DOCUMENT_EXPIRY',
+              vehicleId: vehicle.id || vehicle._id,
+              regNumber: vehicle.regNumber,
+              docType: doc.type,
+              expiryDate: doc.expiryDate,
+              message: alertMessage,
+            });
+          }
+
+          // 2. Dispatch SMS to the Company Owner
+          const owner = await User.findOne({ companyId: vehicle.ownerCompanyId, role: 'owner' });
+          if (owner && owner.phone) {
+            await sendSMS(owner.phone, alertMessage);
+          }
+
+          // 3. Dispatch SMS to the assigned Driver (if present)
+          if (vehicle.assignedDriver) {
+            const driver = await User.findById(vehicle.assignedDriver);
+            if (driver && driver.phone) {
+              await sendSMS(driver.phone, alertMessage);
+            }
+          }
+        }
+      }
+    }
+
+    console.log(`[Scheduler] Finished document checks. Dispatched ${alertCount} alerts.`);
+  } catch (err) {
+    console.error('[Scheduler] Error occurred during vehicle document expiry check:', err);
+  }
+};
+
+/**
+ * Scans all vehicles and auto-creates "Preventive" tickets if the vehicle's odometer
+ * has advanced by more than 4,500 km since its last service.
+ */
+export const checkPreventiveMaintenance = async (): Promise<void> => {
+  console.log('[Scheduler] Executing odometer-based preventive service scans...');
+
+  try {
+    const vehicles = await Vehicle.find();
+    let ticketCreatedCount = 0;
+
+    for (const vehicle of vehicles) {
+      const currentOdo = vehicle.currentOdometer || 0;
+      const lastServiceOdo = vehicle.lastServiceOdometer || 0;
+      const delta = currentOdo - lastServiceOdo;
+
+      // Threshold check: 4500 km
+      if (delta >= 4500) {
+        // Look for existing active/open preventive ticket for this vehicle
+        const existingTicket = await Ticket.findOne({
+          vehicleId: vehicle._id,
+          type: TicketType.PREVENTIVE,
+          status: { $in: [TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.SOLVED_PENDING_PAYMENT] }
+        });
+
+        if (!existingTicket) {
+          // Find company owner to assign reporter if no driver assigned
+          const owner = await User.findOne({ companyId: vehicle.ownerCompanyId, role: 'owner' });
+          if (!owner) continue;
+
+          const reporterId = vehicle.assignedDriver || owner._id;
+          const reporterRole = vehicle.assignedDriver ? 'driver' : 'owner';
+
+          const newTicket = new Ticket({
+            companyId: vehicle.ownerCompanyId,
+            vehicleId: vehicle._id,
+            reportedById: reporterId,
+            reportedByRole: reporterRole,
+            type: TicketType.PREVENTIVE,
+            status: TicketStatus.OPEN,
+            description: `Automated Preventive Alert: Vehicle odometer is at ${currentOdo.toLocaleString()} km, which is ${delta.toLocaleString()} km since the last service (threshold: 4,500 km).`,
+            odoAtReport: currentOdo,
+            activityLog: [
+              {
+                userId: owner._id,
+                action: 'Auto-Created',
+                timestamp: new Date(),
+                details: 'Odometer-triggered preventive maintenance ticket generated by daily scheduler.',
+              }
+            ]
+          });
+
+          await newTicket.save();
+          ticketCreatedCount++;
+
+          const alertMsg = `Auto-Service Alert: Preventive maintenance ticket ${newTicket.ticketNumber} created for Vehicle ${vehicle.regNumber}.`;
+          console.log(`[Scheduler] [PREVENTIVE] ${alertMsg}`);
+
+          // Emit live notification to Socket
+          if (socketServer) {
+            socketServer.emit(SocketEvent.NOTIFICATION, {
+              type: 'PREVENTIVE_TICKET',
+              ticketId: newTicket._id || newTicket.id,
+              ticketNumber: newTicket.ticketNumber,
+              vehicleId: vehicle._id,
+              regNumber: vehicle.regNumber,
+              message: alertMsg,
+            });
+          }
+
+          // Notify owner via SMS
+          if (owner.phone) {
+            await sendSMS(owner.phone, alertMsg);
+          }
+        }
+      }
+    }
+
+    console.log(`[Scheduler] Odometer check completed. Created ${ticketCreatedCount} preventive tickets.`);
+  } catch (err) {
+    console.error('[Scheduler] Error checking preventive maintenance odometer schedules:', err);
+  }
+};
+
+/**
+ * Sets up a timer that triggers at exactly 9:00 AM daily.
+ */
+export const startScheduler = () => {
+  console.log('[Scheduler] Expiry Daily Cron initialized.');
+
+  const scheduleNextRun = () => {
+    const now = new Date();
+    const nextRun = new Date();
+    
+    nextRun.setHours(9, 0, 0, 0);
+
+    // If it is already past 9:00 AM today, schedule for 9:00 AM tomorrow
+    if (now.getTime() >= nextRun.getTime()) {
+      nextRun.setDate(nextRun.getDate() + 1);
+    }
+
+    const delayMs = nextRun.getTime() - now.getTime();
+    console.log(`[Scheduler] Daily check scheduled at ${nextRun.toLocaleString()} (in ${(delayMs / 3600000).toFixed(2)} hours)`);
+
+    setTimeout(async () => {
+      try {
+        await runExpiryChecks();
+        await checkPreventiveMaintenance();
+      } catch (err) {
+        console.error('[Scheduler] Error running scheduled job:', err);
+      }
+      scheduleNextRun();
+    }, delayMs);
+  };
+
+  scheduleNextRun();
+};
+export default startScheduler;
