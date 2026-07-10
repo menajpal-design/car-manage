@@ -2,6 +2,7 @@
 const nextConfig = {
   transpilePackages: ['@fleetmaster/shared'],
   reactStrictMode: false,
+  basePath: '/driver',
   async headers() {
     return [
       {

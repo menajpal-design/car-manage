@@ -31,7 +31,14 @@ export default function MobileLoginPage() {
         localStorage.removeItem("assigned_vehicle");
       }
 
-      router.push("/fuel");
+      const role = data.user.role;
+      if (role === "driver") {
+        router.push("/fuel");
+      } else {
+        // If an owner/manager/admin accidentally logs in here, redirect to the main web app
+        localStorage.setItem("owner_profile", JSON.stringify(data.user));
+        window.location.href = "/";
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message || "Invalid phone number or password.");

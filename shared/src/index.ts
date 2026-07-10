@@ -4,7 +4,9 @@ export enum UserRole {
   DRIVER = 'driver',
   HELPER = 'helper',
   TECHNICIAN = 'technician',
-  ACCOUNTANT = 'accountant'
+  ACCOUNTANT = 'accountant',
+  MANAGER = 'manager',
+  ADMIN = 'admin'
 }
 
 // User Profile Interface

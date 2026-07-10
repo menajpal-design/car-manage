@@ -84,6 +84,16 @@ export default function Home() {
     const profile = JSON.parse(cached);
     setUserProfile(profile);
 
+    if (profile.role === "driver") {
+      window.location.href = "/driver";
+      return;
+    }
+
+    if (profile.role === "manager") {
+      router.push("/dashboard/users");
+      return;
+    }
+
     if (profile.role === "accountant") {
       router.push("/dashboard/payments");
       return;

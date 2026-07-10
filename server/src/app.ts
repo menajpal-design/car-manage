@@ -441,12 +441,14 @@ app.post(
 app.get(
   '/api/users',
   authenticate,
-  authorize(UserRole.OWNER, UserRole.TECHNICIAN), // Allow technicians to select assignees or lookup helpers
+  authorize(UserRole.OWNER, UserRole.TECHNICIAN, UserRole.MANAGER),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const users = await User.find({
-        companyId: req.user?.companyId,
-      }).populate('assignedVehicleId');
+      const filter: any = {};
+      if (req.user?.role !== UserRole.ADMIN) {
+        filter.companyId = req.user?.companyId;
+      }
+      const users = await User.find(filter).populate('assignedVehicleId');
       
       res.status(200).json({ users });
     } catch (err) {
@@ -586,7 +588,10 @@ app.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { status, fuelType, search } = req.query;
-      const query: any = { ownerCompanyId: req.user?.companyId };
+      const query: any = {};
+      if (req.user?.role !== UserRole.ADMIN) {
+        query.ownerCompanyId = req.user?.companyId;
+      }
 
       if (status) {
         query.status = status;

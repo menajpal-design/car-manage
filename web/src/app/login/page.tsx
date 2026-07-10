@@ -33,8 +33,22 @@ export default function LoginPage() {
       });
       if (data.user) {
         localStorage.setItem("owner_profile", JSON.stringify(data.user));
+        
+        const role = data.user.role;
+        if (role === "driver") {
+          localStorage.setItem("driver_profile", JSON.stringify(data.user));
+          if (data.assignedVehicle) {
+            localStorage.setItem("assigned_vehicle", JSON.stringify(data.assignedVehicle));
+          }
+          window.location.href = "/driver";
+        } else if (role === "manager") {
+          router.push("/dashboard/users"); // Redirect manager to their profile/employee directory
+        } else if (role === "admin") {
+          router.push("/dashboard/analytics"); // Redirect admin to full analytics
+        } else {
+          router.push("/");
+        }
       }
-      router.push("/"); // Redirect to dashboard
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message || "Invalid credentials. Please try again.");
