@@ -33,11 +33,20 @@ import { startScheduler, setSocketServerForScheduler, runExpiryChecks } from './
 // Load environment variables
 dotenv.config();
 
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3002',
+  'https://fleet-web.duckdns.org',
+  'https://fleet-driver.duckdns.org',
+  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [])
+];
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -76,6 +85,7 @@ const upload = multer({
 const ticketUploadFields = upload.fields([
   { name: 'images', maxCount: 3 },
   { name: 'voiceNote', maxCount: 1 },
+  { name: 'odometerPhoto', maxCount: 1 },
 ]);
 
 // Middlewares
@@ -84,7 +94,7 @@ app.use(helmet({
 }));
 app.use(
   cors({
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
+    origin: allowedOrigins,
     credentials: true,
   })
 );
