@@ -26,9 +26,9 @@ export default function MobileHome() {
   useEffect(() => {
     const profile = localStorage.getItem("driver_profile");
     if (!profile) {
-      router.push("/login");
+      window.location.href = "/login";
     }
-  }, [router]);
+  }, []);
 
   // Simulate GPS coordinates updating when tracking is active
   useEffect(() => {

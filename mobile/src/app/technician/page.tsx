@@ -58,7 +58,7 @@ export default function TechnicianDashboard() {
 
     const cachedProfile = localStorage.getItem("driver_profile");
     if (!cachedProfile) {
-      router.push("/login");
+      window.location.href = "/login";
       return;
     }
 
@@ -148,7 +148,8 @@ export default function TechnicianDashboard() {
   const handleLogout = () => {
     localStorage.removeItem("driver_profile");
     localStorage.removeItem("assigned_vehicle");
-    router.push("/login");
+    localStorage.removeItem("owner_profile");
+    window.location.href = "/login";
   };
 
   return (

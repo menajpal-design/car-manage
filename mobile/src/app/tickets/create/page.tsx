@@ -106,7 +106,7 @@ export default function CreateTicketPage() {
     const cachedVehicle = localStorage.getItem("assigned_vehicle");
 
     if (!cachedProfile) {
-      router.push("/login");
+      window.location.href = "/login";
       return;
     }
 

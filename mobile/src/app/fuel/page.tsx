@@ -55,7 +55,7 @@ export default function DriverFuelPage() {
     const cachedVehicle = localStorage.getItem("assigned_vehicle");
 
     if (!cachedProfile) {
-      router.push("/login");
+      window.location.href = "/login";
       return;
     }
 
@@ -299,7 +299,8 @@ export default function DriverFuelPage() {
   const handleLogout = () => {
     localStorage.removeItem("driver_profile");
     localStorage.removeItem("assigned_vehicle");
-    router.push("/login");
+    localStorage.removeItem("owner_profile");
+    window.location.href = "/login";
   };
 
   return (
