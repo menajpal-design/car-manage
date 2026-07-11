@@ -223,7 +223,15 @@ export default function VehicleDetailsPage() {
     loadLeaflet();
 
     let socket: any = null;
-    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5000";
+    const getSocketUrl = () => {
+      if (typeof window !== 'undefined') {
+        if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+          return window.location.origin;
+        }
+      }
+      return process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5001";
+    };
+    const socketUrl = getSocketUrl();
     
     import("socket.io-client").then(({ io }) => {
       socket = io(socketUrl, { withCredentials: true });

@@ -1,4 +1,13 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const getBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      return '/api';
+    }
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+};
+
+const BASE_URL = getBaseUrl();
 
 /**
  * Custom API client using native fetch.
