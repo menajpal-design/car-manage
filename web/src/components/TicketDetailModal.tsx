@@ -9,7 +9,7 @@ import {
   Pause,
   AlertTriangle
 } from "lucide-react";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, getBaseUrl } from "@/lib/api";
 import { TicketStatus, UserRole, ITicket, IInvoice, IPartsUsed, ITicketActivity } from "@fleetmaster/shared";
 import PaymentModal from "./PaymentModal";
 
@@ -349,7 +349,7 @@ export default function TicketDetailModal({ ticketId, onClose, onRefresh }: Tick
                 <div className="flex items-center justify-between p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-xs">
                   <span className="font-semibold text-indigo-400">Invoice {invoice.invoiceNumber} is {invoice.status}</span>
                   <a
-                    href={`http://localhost:5000/api/invoices/${invoice.id}/pdf`}
+                    href={`${getBaseUrl()}/invoices/${invoice.id}/pdf`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-lg shadow shadow-indigo-600/10 transition-colors"

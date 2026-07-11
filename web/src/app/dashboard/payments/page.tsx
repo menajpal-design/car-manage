@@ -10,7 +10,7 @@ import {
   AlertTriangle,
   Eye
 } from "lucide-react";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, getBaseUrl } from "@/lib/api";
 import { PaymentMethod, TransactionStatus, UserRole } from "@fleetmaster/shared";
 
 interface PendingRecord {
@@ -166,7 +166,7 @@ export default function PaymentsPage() {
   const handleExportCSV = () => {
     // Generate CSV export link
     const query = `startDate=${startDate}&endDate=${endDate}&paymentMethod=${filterMethod}&status=${filterStatus}`;
-    const exportUrl = `http://localhost:5000/api/transactions/export?${query}`;
+    const exportUrl = `${getBaseUrl()}/transactions/export?${query}`;
     window.open(exportUrl, "_blank");
   };
 
@@ -377,7 +377,7 @@ export default function PaymentsPage() {
                   {/* Printable Invoice Link */}
                   <div className="pt-2 border-t border-slate-900 text-center">
                     <a
-                      href={`http://localhost:5000/api/invoices/${selectedPending.invoiceId?.id}/pdf`}
+                      href={`${getBaseUrl()}/invoices/${selectedPending.invoiceId?.id}/pdf`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-[11px] text-violet-400 hover:underline"

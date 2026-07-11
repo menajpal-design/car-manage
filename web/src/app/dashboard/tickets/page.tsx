@@ -75,7 +75,16 @@ export default function TicketsPage() {
     fetchVehicles();
     fetchKanbanData();
 
-    const socket = io("http://localhost:5000");
+    const getSocketUrl = () => {
+      if (typeof window !== 'undefined') {
+        if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+          return window.location.origin;
+        }
+      }
+      return process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5001";
+    };
+
+    const socket = io(getSocketUrl());
     
     socket.on("notification", (data: { type: string; ticketId?: string; ticketNumber?: string; message?: string }) => {
       console.log("[Kanban Socket] Live alert received:", data);

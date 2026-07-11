@@ -28,7 +28,7 @@ import {
   LineChart,
   Line
 } from "recharts";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, getBaseUrl } from "@/lib/api";
 import { ExpenseCategory, IncomeSource } from "@fleetmaster/shared";
 
 interface VehicleRecord {
@@ -251,7 +251,7 @@ export default function AnalyticsPage() {
 
   const triggerPDFDownload = () => {
     const query = `vehicleId=${selectedVehicle}&month=${selectedMonth}&year=${selectedYear}`;
-    const downloadUrl = `http://localhost:5000/api/reports/profit-loss/pdf?${query}`;
+    const downloadUrl = `${getBaseUrl()}/reports/profit-loss/pdf?${query}`;
     window.open(downloadUrl, "_blank");
   };
 
