@@ -12,7 +12,9 @@ const getBaseUrl = () => {
  * Configured with `credentials: 'include'` for secure cookie routing.
  */
 export async function apiRequest(path: string, options: RequestInit = {}) {
-  const url = `${getBaseUrl()}${path}`;
+  const baseUrl = getBaseUrl();
+  const url = `${baseUrl}${path}`;
+  console.log("[apiRequest] path:", path, "baseUrl:", baseUrl, "url:", url);
   
   const headers = new Headers(options.headers);
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
