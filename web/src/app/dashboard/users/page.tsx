@@ -14,7 +14,10 @@ import {
   FileText,
   Clock,
   Calendar,
-  CheckCircle2
+  CheckCircle2,
+  Printer,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 import { UserRole } from "@fleetmaster/shared";
@@ -31,7 +34,369 @@ interface UserRecord {
   isActive: boolean;
 }
 
+// ── PRINT UTILITY FUNCTION ──
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const handlePrintLedger = (user: UserRecord, year: number, monthName: string, records: any[]) => {
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) return;
 
+  const totalDays = new Date(year, new Date(`${monthName} 1, ${year}`).getMonth() + 1, 0).getDate();
+  const sortedRecords = [...records].sort((a, b) => a.date.localeCompare(b.date));
+  const presentCount = sortedRecords.filter(r => r.status === 'Present').length;
+  const lateCount = sortedRecords.filter(r => r.status === 'Late').length;
+  const leaveCount = sortedRecords.filter(r => r.status === 'Leave').length;
+  const absentCount = sortedRecords.filter(r => r.status === 'Absent').length;
+
+  let rowsHtml = "";
+  for (let day = 1; day <= totalDays; day++) {
+    const formattedDay = String(day).padStart(2, '0');
+    const dateStr = `${year}-${String(new Date(`${monthName} 1, ${year}`).getMonth() + 1).padStart(2, '0')}-${formattedDay}`;
+    const rec = sortedRecords.find(r => r.date === dateStr);
+    const status = rec ? rec.status : "N/A";
+    const notes = rec?.notes || "-";
+    
+    let statusColor = "#475569";
+    if (status === "Present") statusColor = "#16a34a";
+    if (status === "Late") statusColor = "#d97706";
+    if (status === "Leave") statusColor = "#2563eb";
+    if (status === "Absent") statusColor = "#dc2626";
+
+    rowsHtml += `
+      <tr style="border-bottom: 1px solid #e2e8f0;">
+        <td style="padding: 8px 12px; font-weight: 500; font-family: monospace;">${dateStr}</td>
+        <td style="padding: 8px 12px; font-weight: bold; color: ${statusColor};">${status}</td>
+        <td style="padding: 8px 12px; color: #475569;">${notes}</td>
+      </tr>
+    `;
+  }
+
+  const htmlContent = `
+    <html>
+      <head>
+        <title>Attendance Report - ${user.name}</title>
+        <style>
+          body { font-family: system-ui, -apple-system, sans-serif; color: #1e293b; margin: 40px; }
+          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; }
+          .title { font-size: 24px; font-weight: bold; color: #1e1b4b; }
+          .meta-grid { display: grid; grid-template-cols: 1fr 1fr; gap: 20px; margin-top: 25px; margin-bottom: 25px; font-size: 14px; }
+          .meta-item { display: flex; flex-direction: column; }
+          .meta-label { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: bold; letter-spacing: 0.05em; }
+          .meta-value { font-weight: 600; margin-top: 2px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; }
+          th { background-color: #f8fafc; border-bottom: 2px solid #cbd5e1; padding: 10px 12px; text-align: left; font-weight: bold; color: #475569; }
+          .stats-grid { display: grid; grid-template-cols: repeat(4, 1fr); gap: 15px; margin-top: 20px; margin-bottom: 20px; }
+          .stat-card { background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px; text-align: center; }
+          .stat-num { font-size: 18px; font-weight: bold; color: #1e1b4b; }
+          .signature { margin-top: 60px; display: flex; justify-content: space-between; }
+          .sig-line { border-top: 1px solid #94a3b8; width: 200px; text-align: center; padding-top: 8px; font-size: 12px; color: #64748b; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="title">FleetMaster Pro</div>
+            <div style="font-size: 12px; color: #64748b; margin-top: 2px;">Official Staff Attendance Ledger</div>
+          </div>
+          <div style="text-align: right; font-size: 12px; color: #64748b;">
+            Report Date: ${new Date().toLocaleDateString()}
+          </div>
+        </div>
+        
+        <div class="meta-grid">
+          <div class="meta-item">
+            <span class="meta-label">Staff Member</span>
+            <span class="meta-value">${user.name}</span>
+            <span style="font-size: 12px; color: #64748b; margin-top: 2px;">Role: ${user.role} | Phone: ${user.phone}</span>
+          </div>
+          <div class="meta-item" style="text-align: right;">
+            <span class="meta-label">Ledger Period</span>
+            <span class="meta-value">${monthName} ${year}</span>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="meta-label">Present</div>
+            <div class="stat-num" style="color: #16a34a;">${presentCount} Days</div>
+          </div>
+          <div class="stat-card">
+            <div class="meta-label">Late</div>
+            <div class="stat-num" style="color: #d97706;">${lateCount} Days</div>
+          </div>
+          <div class="stat-card">
+            <div class="meta-label">Leave</div>
+            <div class="stat-num" style="color: #2563eb;">${leaveCount} Days</div>
+          </div>
+          <div class="stat-card">
+            <div class="meta-label">Absent</div>
+            <div class="stat-num" style="color: #dc2626;">${absentCount} Days</div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Attendance Status</th>
+              <th>Notes / Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        <div class="signature">
+          <div class="sig-line">Prepared By (Dispatcher/HR)</div>
+          <div class="sig-line">Employee Signature</div>
+          <div class="sig-line">Authorized Signee (Owner)</div>
+        </div>
+        
+        <script>
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
+    </html>
+  `;
+
+  printWindow.document.write(htmlContent);
+  printWindow.document.close();
+};
+
+// ── ATTENDANCE CALENDAR MODAL COMPONENT ──
+function AttendanceCalendarModal({ user, initialDate, onClose }: { user: UserRecord; initialDate: string; onClose: () => void }) {
+  const [currentYear, setCurrentYear] = useState(new Date(initialDate).getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(new Date(initialDate).getMonth()); // 0-11
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [recs, setRecs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingDay, setEditingDay] = useState<number | null>(null);
+
+  const fetchMonthData = useCallback(async (year: number, month: number) => {
+    setLoading(true);
+    try {
+      const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const data = await apiRequest(`/attendance?userId=${user.id}&month=${monthStr}`);
+      setRecs(data.records || []);
+    } catch (err) {
+      console.error("Failed to load month calendar:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user.id]);
+
+  useEffect(() => {
+    fetchMonthData(currentYear, currentMonth);
+  }, [currentYear, currentMonth, fetchMonthData]);
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June", 
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  const handlePrevMonth = () => {
+    if (currentMonth === 0) {
+      setCurrentMonth(11);
+      setCurrentYear(prev => prev - 1);
+    } else {
+      setCurrentMonth(prev => prev - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (currentMonth === 11) {
+      setCurrentMonth(0);
+      setCurrentYear(prev => prev + 1);
+    } else {
+      setCurrentMonth(prev => prev - 1);
+    }
+  };
+
+  const handleStatusChange = async (day: number, status: 'Present' | 'Absent' | 'Late' | 'Leave') => {
+    const formattedMonth = String(currentMonth + 1).padStart(2, '0');
+    const dateStr = `${currentYear}-${formattedMonth}-${String(day).padStart(2, '0')}`;
+    setEditingDay(null);
+    try {
+      await apiRequest("/attendance", {
+        method: "POST",
+        body: JSON.stringify({
+          userId: user.id,
+          date: dateStr,
+          status
+        })
+      });
+      fetchMonthData(currentYear, currentMonth);
+    } catch {
+      alert("Failed to update attendance day status.");
+    }
+  };
+
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const startDayOfWeek = new Date(currentYear, currentMonth, 1).getDay();
+
+  const daysGrid: (number | null)[] = [];
+  for (let i = 0; i < startDayOfWeek; i++) {
+    daysGrid.push(null);
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    daysGrid.push(d);
+  }
+
+  const handlePrint = () => {
+    handlePrintLedger(user, currentYear, monthNames[currentMonth], recs);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
+      <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+          <div>
+            <h3 className="font-bold text-white text-base">Attendance Calendar</h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">{user.name} • {user.role}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={handlePrint}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-800 hover:border-slate-700 bg-slate-950/50 text-slate-350 hover:text-white text-xs font-semibold transition-colors"
+            >
+              <Printer className="h-3.5 w-3.5" /> Print Ledger
+            </button>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-200 transition-colors">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {/* Calendar Selectors */}
+          <div className="flex items-center justify-between bg-slate-950/40 border border-slate-850 p-2.5 rounded-xl">
+            <div className="flex items-center gap-1">
+              <button onClick={handlePrevMonth} className="p-1 rounded-lg text-slate-400 hover:bg-slate-850 hover:text-white transition-colors">
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="text-xs font-bold text-slate-200 min-w-24 text-center">{monthNames[currentMonth]}</span>
+              <button onClick={handleNextMonth} className="p-1 rounded-lg text-slate-400 hover:bg-slate-850 hover:text-white transition-colors">
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            
+            <div className="flex items-center gap-1">
+              <button onClick={() => setCurrentYear(prev => prev - 1)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-850 hover:text-white transition-colors">
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="text-xs font-bold text-slate-200 min-w-16 text-center">{currentYear}</span>
+              <button onClick={() => setCurrentYear(prev => prev + 1)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-850 hover:text-white transition-colors">
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Calendar Grid */}
+          {loading ? (
+            <div className="h-64 flex items-center justify-center text-xs text-slate-500">Loading ledger data...</div>
+          ) : (
+            <div className="space-y-1">
+              {/* Day headers */}
+              <div className="grid grid-cols-7 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider py-1">
+                <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+              </div>
+              
+              {/* Days */}
+              <div className="grid grid-cols-7 gap-1">
+                {daysGrid.map((day, idx) => {
+                  if (day === null) {
+                    return <div key={`empty-${idx}`} className="h-12 bg-slate-950/10 rounded-lg"></div>;
+                  }
+
+                  const formattedMonth = String(currentMonth + 1).padStart(2, '0');
+                  const dateStr = `${currentYear}-${formattedMonth}-${String(day).padStart(2, '0')}`;
+                  const dayRec = recs.find(r => r.date === dateStr);
+                  const status = dayRec ? dayRec.status : null;
+
+                  let borderClass = "border border-slate-800/40 hover:border-slate-700 hover:bg-slate-850/20";
+                  let bgTextClass = "text-slate-350";
+                  
+                  if (status === "Present") {
+                    borderClass = "border border-emerald-500/30";
+                    bgTextClass = "bg-emerald-500/10 text-emerald-400";
+                  } else if (status === "Late") {
+                    borderClass = "border border-amber-500/30";
+                    bgTextClass = "bg-amber-500/10 text-amber-400";
+                  } else if (status === "Leave") {
+                    borderClass = "border border-blue-500/30";
+                    bgTextClass = "bg-blue-500/10 text-blue-400";
+                  } else if (status === "Absent") {
+                    borderClass = "border border-rose-500/30";
+                    bgTextClass = "bg-rose-500/10 text-rose-450";
+                  }
+
+                  return (
+                    <div 
+                      key={`day-${day}`} 
+                      onClick={() => setEditingDay(editingDay === day ? null : day)}
+                      className={`h-12 rounded-lg p-1.5 flex flex-col justify-between cursor-pointer relative transition-all ${borderClass} ${bgTextClass}`}
+                    >
+                      <span className="text-[10px] font-bold">{day}</span>
+                      
+                      {status && (
+                        <span className="text-[9px] font-black uppercase tracking-wider block text-right mt-1">
+                          {status === 'Present' ? 'PRE' : status === 'Late' ? 'LAT' : status === 'Leave' ? 'LV' : 'ABS'}
+                        </span>
+                      )}
+
+                      {/* Dropdown status selector */}
+                      {editingDay === day && (
+                        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1.5 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-1.5 flex gap-1 animate-in zoom-in-95 duration-100">
+                          <button 
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleStatusChange(day, 'Present'); }} 
+                            className="h-7 w-7 flex items-center justify-center text-[10px] font-bold rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-400 border border-emerald-500/10"
+                          >
+                            P
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleStatusChange(day, 'Late'); }} 
+                            className="h-7 w-7 flex items-center justify-center text-[10px] font-bold rounded-lg bg-amber-500/20 hover:bg-amber-500/35 text-amber-400 border border-amber-500/10"
+                          >
+                            L
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleStatusChange(day, 'Leave'); }} 
+                            className="h-7 w-7 flex items-center justify-center text-[10px] font-bold rounded-lg bg-blue-500/20 hover:bg-blue-500/35 text-blue-400 border border-blue-500/10"
+                          >
+                            LV
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleStatusChange(day, 'Absent'); }} 
+                            className="h-7 w-7 flex items-center justify-center text-[10px] font-bold rounded-lg bg-rose-500/20 hover:bg-rose-500/35 text-rose-455 border border-rose-500/10"
+                          >
+                            A
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setEditingDay(null); }} 
+                            className="h-7 w-7 flex items-center justify-center text-[10px] font-bold rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-350"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function UsersManagementPage() {
   const [activeTab, setActiveTab] = useState<"directory" | "attendance">("directory");
@@ -43,8 +408,13 @@ export default function UsersManagementPage() {
   // Attendance states
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
   const [attendanceMap, setAttendanceMap] = useState<{ [userId: string]: 'Present' | 'Absent' | 'Late' | 'Leave' }>({});
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [monthlyRecords, setMonthlyRecords] = useState<any[]>([]);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [attendanceSavedMsg, setAttendanceSavedMsg] = useState("");
+  
+  // Interactive calendar selection
+  const [selectedUserForCalendar, setSelectedUserForCalendar] = useState<UserRecord | null>(null);
 
   // Modal control states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -79,13 +449,18 @@ export default function UsersManagementPage() {
   const fetchAttendance = useCallback(async (date: string) => {
     setAttendanceLoading(true);
     try {
-      const data = await apiRequest(`/attendance?date=${date}`);
+      const monthStr = date.substring(0, 7); // YYYY-MM
+      const data = await apiRequest(`/attendance?month=${monthStr}`);
       const list = data.records || [];
+      setMonthlyRecords(list);
+
       const map: { [userId: string]: 'Present' | 'Absent' | 'Late' | 'Leave' } = {};
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       list.forEach((rec: any) => {
-        const uid = typeof rec.userId === 'object' && rec.userId ? (rec.userId.id || rec.userId._id) : rec.userId;
-        map[uid] = rec.status;
+        if (rec.date === date) {
+          const uid = typeof rec.userId === 'object' && rec.userId ? (rec.userId.id || rec.userId._id) : rec.userId;
+          map[uid] = rec.status;
+        }
       });
       setAttendanceMap(map);
     } catch (err) {
@@ -192,10 +567,8 @@ export default function UsersManagementPage() {
     }
   };
 
-  // Mark attendance status dynamically
   const handleMarkAttendance = async (userId: string, status: 'Present' | 'Absent' | 'Late' | 'Leave') => {
     try {
-      setAttendanceMap(prev => ({ ...prev, [userId]: status }));
       await apiRequest("/attendance", {
         method: "POST",
         body: JSON.stringify({
@@ -206,9 +579,24 @@ export default function UsersManagementPage() {
       });
       setAttendanceSavedMsg("Attendance auto-saved successfully.");
       setTimeout(() => setAttendanceSavedMsg(""), 3000);
+      fetchAttendance(attendanceDate);
     } catch {
       alert("Failed to save attendance change.");
     }
+  };
+
+  const getMonthlyStats = (userId: string) => {
+    const userMonthRecs = monthlyRecords.filter(rec => {
+      const uid = typeof rec.userId === 'object' && rec.userId ? (rec.userId.id || rec.userId._id) : rec.userId;
+      return uid === userId;
+    });
+    const presentCount = userMonthRecs.filter(rec => rec.status === 'Present').length;
+    
+    const year = parseInt(attendanceDate.split('-')[0], 10);
+    const month = parseInt(attendanceDate.split('-')[1], 10);
+    const totalDays = new Date(year, month, 0).getDate();
+
+    return { presentCount, totalDays };
   };
 
   const filteredUsers = users.filter((u) =>
@@ -425,12 +813,14 @@ export default function UsersManagementPage() {
                       <tr className="border-b border-slate-800 bg-slate-900/60 text-slate-400 text-xs font-medium uppercase tracking-wider">
                         <th className="p-4">Staff Member</th>
                         <th className="p-4">Corporate Role</th>
+                        <th className="p-4 text-center">Logs Total</th>
                         <th className="p-4 text-center">Attendance Logs</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-850">
                       {users.filter(u => u.role !== UserRole.OWNER).map((user) => {
                         const currentStatus = attendanceMap[user.id] || "Absent";
+                        const stats = getMonthlyStats(user.id);
 
                         return (
                           <tr key={user.id} className="hover:bg-slate-900/30 transition-colors">
@@ -440,6 +830,15 @@ export default function UsersManagementPage() {
                             </td>
                             <td className="p-4">
                               <span className="text-xs font-semibold capitalize text-slate-400">{user.role}</span>
+                            </td>
+                            <td className="p-4 text-center">
+                              <button
+                                onClick={() => setSelectedUserForCalendar(user)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-800 hover:border-violet-500/40 bg-slate-950/40 hover:bg-violet-500/10 text-2xs font-bold text-violet-400 hover:text-violet-300 transition-all"
+                              >
+                                <Calendar className="h-3.5 w-3.5" />
+                                <span>{stats.presentCount} / {stats.totalDays} Days</span>
+                              </button>
                             </td>
                             <td className="p-4">
                               <div className="flex items-center justify-center gap-2 max-w-sm mx-auto">
@@ -481,7 +880,7 @@ export default function UsersManagementPage() {
                                   onClick={() => handleMarkAttendance(user.id, 'Absent')}
                                   className={`flex-1 h-9 rounded-lg font-bold text-2xs uppercase transition-all ${
                                     currentStatus === 'Absent'
-                                      ? "bg-rose-500/20 text-rose-450 border border-rose-500/40"
+                                      ? "bg-rose-500/20 text-rose-455 border border-rose-500/40"
                                       : "bg-slate-950/40 border border-slate-900 text-slate-500 hover:text-slate-350"
                                   }`}
                                 >
@@ -743,6 +1142,18 @@ export default function UsersManagementPage() {
               </form>
             </div>
           </div>
+        )}
+
+        {/* ── CALENDAR MODAL VIEW ── */}
+        {selectedUserForCalendar && (
+          <AttendanceCalendarModal
+            user={selectedUserForCalendar}
+            initialDate={attendanceDate}
+            onClose={() => {
+              setSelectedUserForCalendar(null);
+              fetchAttendance(attendanceDate);
+            }}
+          />
         )}
 
       </div>

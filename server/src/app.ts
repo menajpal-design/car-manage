@@ -2727,11 +2727,13 @@ app.get(
   authenticate,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { date, userId } = req.query;
+      const { date, userId, month } = req.query;
       const query: any = { companyId: req.user?.companyId };
 
       if (date) {
         query.date = date;
+      } else if (month) {
+        query.date = { $regex: new RegExp(`^${month}`) };
       }
       if (userId) {
         query.userId = userId;
