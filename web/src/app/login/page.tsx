@@ -84,6 +84,7 @@ export default function LoginPage() {
                 type="tel"
                 name="phone"
                 required
+                autoComplete="username"
                 value={formData.phone}
                 onChange={handleChange}
                 placeholder="e.g. +15550199"
@@ -103,6 +104,7 @@ export default function LoginPage() {
                 type="password"
                 name="password"
                 required
+                autoComplete="current-password"
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="••••••••"

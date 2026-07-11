@@ -153,7 +153,7 @@ const setAuthCookies = (res: Response, accessToken: string, refreshToken: string
   const cookieOptions = {
     httpOnly: true,
     secure: isProduction,
-    sameSite: isProduction ? ('none' as const) : ('lax' as const),
+    sameSite: 'lax' as const,
   };
 
   res.cookie('accessToken', accessToken, {
@@ -173,7 +173,7 @@ const clearAuthCookies = (res: Response) => {
   const cookieOptions = {
     httpOnly: true,
     secure: isProduction,
-    sameSite: isProduction ? ('none' as const) : ('lax' as const),
+    sameSite: 'lax' as const,
   };
 
   res.clearCookie('accessToken', cookieOptions);
