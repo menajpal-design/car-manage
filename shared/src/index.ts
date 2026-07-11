@@ -21,6 +21,7 @@ export interface IUser {
   assignedVehicleId?: string;
   licenseNumber?: string;
   licenseExpiry?: Date;
+  baseSalary?: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -61,6 +62,7 @@ export interface IVehicle {
   lastServiceOdometer: number;
   lastFuelOdometer: number;
   documents: IVehicleDocument[];
+  status: VehicleStatus;
   assignedDriver?: string;
   assignedHelper?: string;
   ownerCompanyId: string;
@@ -333,6 +335,23 @@ export enum SocketEvent {
   LOCATION_UPDATE = 'location_update',
   TRIP_STATUS_CHANGE = 'trip_status_change',
   NOTIFICATION = 'notification'
+}
+
+// Attendance Status
+export type AttendanceStatus = 'Present' | 'Absent' | 'Late' | 'Leave';
+
+// Attendance Interface
+export interface IAttendance {
+  id: string;
+  userId: any; // User ID or Populated User
+  date: string; // YYYY-MM-DD
+  status: AttendanceStatus;
+  clockIn?: Date;
+  clockOut?: Date;
+  notes?: string;
+  companyId: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 // Helper types or validators

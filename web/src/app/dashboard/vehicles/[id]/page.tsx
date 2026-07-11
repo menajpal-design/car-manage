@@ -18,7 +18,8 @@ import {
   Download, 
   Trash2, 
   UploadCloud,
-  MapPin
+  MapPin,
+  Clock
 } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 import { VehicleStatus, VehicleFuelType } from "@fleetmaster/shared";
@@ -95,8 +96,11 @@ export default function VehicleDetailsPage() {
   const [services, setServices] = useState<ServiceRecord[]>([]);
   const [fuelLogs, setFuelLogs] = useState<FuelLog[]>([]);
   const [expenses, setExpenses] = useState<ExpenseLog[]>([]);
+  const [incomes, setIncomes] = useState<any[]>([]);
+  const [trips, setTrips] = useState<any[]>([]);
+  const [tripsLoading, setTripsLoading] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"profile" | "documents" | "services" | "fuel" | "expenses" | "tracking">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "documents" | "services" | "fuel" | "expenses" | "tracking" | "trips" | "financials">("profile");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [gpsInput, setGpsInput] = useState("");
@@ -121,6 +125,7 @@ export default function VehicleDetailsPage() {
       setServices(data.serviceHistory || []);
       setFuelLogs(data.fuelLogs || []);
       setExpenses(data.expenses || []);
+      setIncomes(data.incomes || []);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message || "Failed to load vehicle details.");
@@ -152,6 +157,24 @@ export default function VehicleDetailsPage() {
   useEffect(() => {
     fetchVehicleDetails();
   }, [fetchVehicleDetails]);
+
+  const fetchTrips = useCallback(async () => {
+    setTripsLoading(true);
+    try {
+      const data = await apiRequest(`/trips?vehicleId=${vehicleId}`);
+      setTrips(data.trips || []);
+    } catch (err) {
+      console.error("Failed to load vehicle trips:", err);
+    } finally {
+      setTripsLoading(false);
+    }
+  }, [vehicleId]);
+
+  useEffect(() => {
+    if (activeTab === "trips" || activeTab === "financials") {
+      fetchTrips();
+    }
+  }, [activeTab, fetchTrips]);
 
   useEffect(() => {
     if (activeTab !== "tracking" || !vehicle) return;
@@ -495,6 +518,18 @@ export default function VehicleDetailsPage() {
             className={`pb-3 transition-all flex items-center gap-1.5 border-b-2 ${activeTab === "tracking" ? "border-violet-500 text-violet-400" : "border-transparent text-slate-400 hover:text-slate-200"}`}
           >
             <MapPin className="h-4 w-4" /> Live Tracking
+          </button>
+          <button 
+            onClick={() => setActiveTab("trips")}
+            className={`pb-3 transition-all flex items-center gap-1.5 border-b-2 ${activeTab === "trips" ? "border-violet-500 text-violet-400" : "border-transparent text-slate-400 hover:text-slate-200"}`}
+          >
+            <Clock className="h-4 w-4" /> Trip History ({trips.length})
+          </button>
+          <button 
+            onClick={() => setActiveTab("financials")}
+            className={`pb-3 transition-all flex items-center gap-1.5 border-b-2 ${activeTab === "financials" ? "border-violet-500 text-violet-400" : "border-transparent text-slate-400 hover:text-slate-200"}`}
+          >
+            <DollarSign className="h-4 w-4" /> Financial Ledger
           </button>
         </div>
 
@@ -929,6 +964,187 @@ export default function VehicleDetailsPage() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TRIP HISTORY TAB */}
+          {activeTab === "trips" && (
+            <div className="rounded-xl border border-slate-850 bg-slate-900/10 p-6 space-y-4">
+              <h3 className="font-bold text-white text-base">Vehicle Trip History</h3>
+              {tripsLoading ? (
+                <p className="text-sm text-slate-500 italic">Loading trip history...</p>
+              ) : trips.length === 0 ? (
+                <p className="text-sm text-slate-500 italic">No trips registered for this vehicle.</p>
+              ) : (
+                <div className="overflow-hidden rounded-lg border border-slate-800">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="bg-slate-900/60 text-slate-400 text-xs font-semibold">
+                        <th className="p-3">Trip ID</th>
+                        <th className="p-3">Route</th>
+                        <th className="p-3">Dates</th>
+                        <th className="p-3">Odometer Range</th>
+                        <th className="p-3">Distance</th>
+                        <th className="p-3">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800 text-xs text-slate-300">
+                      {trips.map((trip) => {
+                        const distance = trip.endMileage && trip.startMileage ? `${trip.endMileage - trip.startMileage} km` : "Active";
+                        return (
+                          <tr key={trip.id} className="hover:bg-slate-900/40 transition-colors">
+                            <td className="p-3 font-semibold text-slate-200">{trip.tripNumber}</td>
+                            <td className="p-3">{trip.origin} ➔ {trip.destination}</td>
+                            <td className="p-3">
+                              {trip.actualStartTime ? new Date(trip.actualStartTime).toLocaleDateString() : 'N/A'} 
+                              {trip.actualEndTime ? ` - ${new Date(trip.actualEndTime).toLocaleDateString()}` : ''}
+                            </td>
+                            <td className="p-3 font-mono">
+                              {trip.startMileage?.toLocaleString()} km - {trip.endMileage ? `${trip.endMileage.toLocaleString()} km` : 'Active'}
+                            </td>
+                            <td className="p-3 font-bold text-violet-400">{distance}</td>
+                            <td className="p-3">
+                              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-semibold ${
+                                trip.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400' :
+                                trip.status === 'IN_PROGRESS' ? 'bg-amber-500/10 text-amber-400' :
+                                'bg-rose-500/10 text-rose-400'
+                              }`}>
+                                {trip.status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* FINANCIAL LEDGER TAB */}
+          {activeTab === "financials" && (
+            <div className="space-y-6">
+              {/* Stat Cards Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="rounded-xl border border-slate-850 bg-slate-900/10 p-5 space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Total Revenue</span>
+                  <span className="text-xl font-bold text-emerald-400 block">
+                    ${incomes.reduce((acc, curr) => acc + curr.amount, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                  </span>
+                </div>
+                <div className="rounded-xl border border-slate-850 bg-slate-900/10 p-5 space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Fuel Cost</span>
+                  <span className="text-xl font-bold text-rose-400 block">
+                    ${fuelLogs.reduce((acc, curr) => acc + curr.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                  </span>
+                </div>
+                <div className="rounded-xl border border-slate-850 bg-slate-900/10 p-5 space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Repairs Cost</span>
+                  <span className="text-xl font-bold text-rose-400 block">
+                    ${services.reduce((acc, curr) => acc + curr.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                  </span>
+                </div>
+                <div className="rounded-xl border border-slate-850 bg-slate-900/10 p-5 space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Net Earnings</span>
+                  <span className={`text-xl font-bold block ${
+                    (incomes.reduce((acc, curr) => acc + curr.amount, 0) - 
+                     (fuelLogs.reduce((acc, curr) => acc + curr.cost, 0) + 
+                      services.reduce((acc, curr) => acc + curr.cost, 0) + 
+                      expenses.reduce((acc, curr) => acc + curr.amount, 0))) >= 0 
+                      ? "text-emerald-400" 
+                      : "text-rose-400"
+                  }`}>
+                    ${(incomes.reduce((acc, curr) => acc + curr.amount, 0) - 
+                       (fuelLogs.reduce((acc, curr) => acc + curr.cost, 0) + 
+                        services.reduce((acc, curr) => acc + curr.cost, 0) + 
+                        expenses.reduce((acc, curr) => acc + curr.amount, 0))).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                  </span>
+                </div>
+              </div>
+
+              {/* Side-by-side Income and Expenses list */}
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Income Ledger */}
+                <div className="rounded-xl border border-slate-850 bg-slate-900/10 p-5 space-y-4">
+                  <h4 className="font-bold text-white text-sm">Income Stream</h4>
+                  {incomes.length === 0 ? (
+                    <p className="text-xs text-slate-500 italic">No income streams registered for this vehicle.</p>
+                  ) : (
+                    <div className="overflow-hidden rounded-lg border border-slate-800">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="bg-slate-900/60 text-slate-400 text-2xs font-semibold">
+                            <th className="p-2">Date</th>
+                            <th className="p-2">Source</th>
+                            <th className="p-2">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800 text-slate-300">
+                          {incomes.map((inc) => (
+                            <tr key={inc.id} className="hover:bg-slate-900/40">
+                              <td className="p-2">{new Date(inc.date).toLocaleDateString()}</td>
+                              <td className="p-2 font-medium">{inc.source}</td>
+                              <td className="p-2 text-emerald-400 font-bold">${inc.amount.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Expenses Ledger */}
+                <div className="rounded-xl border border-slate-850 bg-slate-900/10 p-5 space-y-4">
+                  <h4 className="font-bold text-white text-sm">Expenses Breakdown</h4>
+                  <div className="space-y-3.5">
+                    <div className="grid grid-cols-3 gap-2 text-2xs text-slate-500 uppercase tracking-wider font-bold">
+                      <div>Category</div>
+                      <div>Occurrences</div>
+                      <div className="text-right">Total</div>
+                    </div>
+                    <div className="h-px bg-slate-800"></div>
+
+                    {/* Fuel Category */}
+                    <div className="grid grid-cols-3 text-xs text-slate-300">
+                      <div className="font-semibold">Fuel Cost</div>
+                      <div>{fuelLogs.length} entries</div>
+                      <div className="text-right text-rose-400 font-bold">
+                        ${fuelLogs.reduce((acc, curr) => acc + curr.cost, 0).toFixed(2)}
+                      </div>
+                    </div>
+
+                    {/* Service/Repairs Category */}
+                    <div className="grid grid-cols-3 text-xs text-slate-300">
+                      <div className="font-semibold">Repairs & Service</div>
+                      <div>{services.length} entries</div>
+                      <div className="text-right text-rose-400 font-bold">
+                        ${services.reduce((acc, curr) => acc + curr.cost, 0).toFixed(2)}
+                      </div>
+                    </div>
+
+                    {/* Other Category */}
+                    <div className="grid grid-cols-3 text-xs text-slate-300">
+                      <div className="font-semibold">Operational/Other</div>
+                      <div>{expenses.length} entries</div>
+                      <div className="text-right text-rose-450 font-bold">
+                        ${expenses.reduce((acc, curr) => acc + curr.amount, 0).toFixed(2)}
+                      </div>
+                    </div>
+
+                    <div className="h-px bg-slate-800"></div>
+                    <div className="grid grid-cols-3 text-xs font-bold text-white">
+                      <div>Total Expenses</div>
+                      <div></div>
+                      <div className="text-right text-rose-450">
+                        ${(fuelLogs.reduce((acc, curr) => acc + curr.cost, 0) + 
+                           services.reduce((acc, curr) => acc + curr.cost, 0) + 
+                           expenses.reduce((acc, curr) => acc + curr.amount, 0)).toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>

@@ -14,6 +14,7 @@ export interface IUserDocument extends Document {
   assignedVehicleId?: Schema.Types.ObjectId | string;
   licenseNumber?: string;
   licenseExpiry?: Date;
+  baseSalary?: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -70,6 +71,10 @@ const userSchema = new Schema<IUserDocument, UserModelType>(
     },
     licenseExpiry: {
       type: Date,
+    },
+    baseSalary: {
+      type: Number,
+      default: 0,
     },
     isActive: {
       type: Boolean,

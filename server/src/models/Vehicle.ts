@@ -1,5 +1,5 @@
 import { Schema, model } from 'mongoose';
-import { VehicleFuelType } from '@fleetmaster/shared';
+import { VehicleFuelType, VehicleStatus } from '@fleetmaster/shared';
 
 export interface IVehicleDocument {
   type: string; // Registration, Insurance, Permit, etc.
@@ -21,6 +21,7 @@ export interface IVehicle {
   lastServiceOdometer: number;
   lastFuelOdometer: number;
   documents: IVehicleDocument[];
+  status: VehicleStatus;
   assignedDriver?: Schema.Types.ObjectId | string;
   assignedHelper?: Schema.Types.ObjectId | string;
   ownerCompanyId: Schema.Types.ObjectId | string;
@@ -103,6 +104,11 @@ const vehicleSchema = new Schema<IVehicle>(
       default: 0,
     },
     documents: [vehicleDocumentSchema],
+    status: {
+      type: String,
+      enum: Object.values(VehicleStatus),
+      default: VehicleStatus.IDLE,
+    },
     assignedDriver: {
       type: Schema.Types.ObjectId,
       ref: 'User',

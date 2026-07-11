@@ -23,6 +23,8 @@ import { Transaction } from './models/Transaction';
 import { Expense } from './models/Expense';
 import { Income } from './models/Income';
 import { LocationLog } from './models/LocationLog';
+import { Attendance } from './models/Attendance';
+import { Trip } from './models/Trip';
 import { authenticate } from './middleware/auth';
 import { authorize } from './middleware/rbac';
 import { sendSMS } from './services/sms';
@@ -382,7 +384,7 @@ app.post(
   authorize(UserRole.OWNER),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { name, phone, role, email, licenseNumber, licenseExpiry, assignedVehicleId } = req.body;
+      const { name, phone, role, email, licenseNumber, licenseExpiry, assignedVehicleId, baseSalary } = req.body;
 
       if (!name || !phone || !role) {
         return res.status(400).json({ message: 'Name, phone, and role are required.' });
@@ -406,6 +408,7 @@ app.post(
         role,
         licenseNumber,
         licenseExpiry,
+        baseSalary: baseSalary || 0,
         assignedVehicleId: assignedVehicleId || undefined,
         passwordHash: tempPassword,
         companyId: req.user?.companyId,
@@ -464,7 +467,7 @@ app.put(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      const { name, phone, role, email, licenseNumber, licenseExpiry, assignedVehicleId, isActive } = req.body;
+      const { name, phone, role, email, licenseNumber, licenseExpiry, assignedVehicleId, baseSalary, isActive } = req.body;
 
       const user = await User.findOne({ _id: id, companyId: req.user?.companyId });
       if (!user) {
@@ -484,6 +487,7 @@ app.put(
       if (role && role !== UserRole.OWNER) user.role = role as UserRole;
       if (licenseNumber !== undefined) user.licenseNumber = licenseNumber;
       if (licenseExpiry !== undefined) user.licenseExpiry = licenseExpiry;
+      if (baseSalary !== undefined) user.baseSalary = baseSalary;
       if (isActive !== undefined) user.isActive = isActive;
       
       if (assignedVehicleId !== undefined) {
@@ -704,33 +708,41 @@ app.get(
         });
       }
 
-      const serviceHistory = [
-        {
-          id: 'SRV-001',
-          date: new Date(Date.now() - 30 * 24 * 3600 * 1000),
-          type: 'Scheduled Oil Change',
-          odometer: vehicle.lastServiceOdometer || 12000,
-          cost: 150.00,
-          status: 'Completed',
-          technician: 'Marcus Vance',
-          notes: 'Full synthetic oil filter replaced, tire rotations checked.'
-        },
-        {
-          id: 'SRV-002',
-          date: new Date(Date.now() - 90 * 24 * 3600 * 1000),
-          type: 'Brake Pad Replacement',
-          odometer: Math.max(0, (vehicle.lastServiceOdometer || 12000) - 8000),
-          cost: 450.00,
-          status: 'Completed',
-          technician: 'Marcus Vance',
-          notes: 'Front and rear ceramic brake pads replaced. Calipers inspected.'
-        }
-      ];
+      // Fetch actual resolved/closed tickets as service history
+      const dbTickets = await Ticket.find({ vehicleId: id })
+        .populate('assignedToId', 'name')
+        .sort({ createdAt: -1 });
 
-      const expenses = [
-        { id: 'EXP-001', date: new Date(), category: 'Tolls', amount: 45.00, description: 'EZ-Pass Toll Refill' },
-        { id: 'EXP-002', date: new Date(Date.now() - 15 * 24 * 3600 * 1000), category: 'Cleaning', amount: 30.00, description: 'Deep truck cabin wash' }
-      ];
+      const serviceHistory = dbTickets.map(t => ({
+        id: t.id || (t as any)._id,
+        date: t.resolvedAt || (t as any).createdAt,
+        type: t.type,
+        odometer: t.odoAtReport,
+        cost: t.solution ? t.solution.totalCost : 0,
+        status: t.status,
+        technician: (t.assignedToId as any)?.name || 'N/A',
+        notes: `${t.description}${t.solution ? ' | Solved: ' + t.solution.description : ''}`
+      }));
+
+      // Fetch actual database expenses
+      const dbExpenses = await Expense.find({ vehicleId: id }).sort({ date: -1 });
+      const expenses = dbExpenses.map(e => ({
+        id: e.id || (e as any)._id,
+        date: e.date,
+        category: e.category,
+        amount: e.amount,
+        description: e.notes || e.category
+      }));
+
+      // Fetch actual database incomes
+      const dbIncomes = await Income.find({ vehicleId: id }).sort({ date: -1 });
+      const incomes = dbIncomes.map(i => ({
+        id: i.id || (i as any)._id,
+        date: i.date,
+        source: i.source,
+        amount: i.amount,
+        description: i.description || i.source
+      }));
 
       res.status(200).json({
         vehicle: vehicleWithSignedUrls,
@@ -747,6 +759,7 @@ app.get(
           }
         ],
         expenses,
+        incomes,
       });
     } catch (err) {
       next(err);
@@ -2668,6 +2681,178 @@ app.get(
       doc.fontSize(8).fillColor('#94a3b8').text('This document was dynamically compiled via FleetMaster Pro secure PDFKit streaming engines. Page 1 of 1.', { align: 'center' });
 
       doc.end();
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// --- ATTENDANCE MANAGEMENT API ENDPOINTS ---
+
+app.post(
+  '/api/attendance',
+  authenticate,
+  authorize(UserRole.OWNER, UserRole.MANAGER),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { userId, date, status, clockIn, clockOut, notes } = req.body;
+
+      if (!userId || !date || !status) {
+        return res.status(400).json({ message: 'User ID, date (YYYY-MM-DD), and status are required.' });
+      }
+
+      const attendance = await Attendance.findOneAndUpdate(
+        { userId, date, companyId: req.user?.companyId },
+        {
+          userId,
+          date,
+          status,
+          clockIn: clockIn ? new Date(clockIn) : undefined,
+          clockOut: clockOut ? new Date(clockOut) : undefined,
+          notes,
+          companyId: req.user?.companyId,
+        },
+        { new: true, upsert: true }
+      );
+
+      res.status(200).json({ message: 'Attendance recorded successfully', attendance });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+app.get(
+  '/api/attendance',
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { date, userId } = req.query;
+      const query: any = { companyId: req.user?.companyId };
+
+      if (date) {
+        query.date = date;
+      }
+      if (userId) {
+        query.userId = userId;
+      }
+
+      const records = await Attendance.find(query).populate('userId', 'name role phone');
+      res.status(200).json({ records });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// --- TRIP MANAGEMENT API ENDPOINTS ---
+
+app.post(
+  '/api/trips',
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { vehicleId, origin, destination, startMileage, helperId, notes } = req.body;
+
+      if (!vehicleId || !origin || !destination) {
+        return res.status(400).json({ message: 'Vehicle, origin, and destination are required.' });
+      }
+
+      const vehicle = await Vehicle.findOne({ _id: vehicleId, ownerCompanyId: req.user?.companyId });
+      if (!vehicle) {
+        return res.status(404).json({ message: 'Vehicle not found.' });
+      }
+
+      const tripNumber = `TRIP-${Date.now().toString().slice(-6)}`;
+
+      const trip = new Trip({
+        tripNumber,
+        vehicleId,
+        driverId: req.user?.userId,
+        helperId: helperId || undefined,
+        origin,
+        destination,
+        scheduledStartTime: new Date(),
+        actualStartTime: new Date(),
+        status: 'IN_PROGRESS',
+        startMileage: startMileage || vehicle.currentOdometer || 0,
+        notes,
+        companyId: req.user?.companyId,
+      });
+
+      await trip.save();
+
+      vehicle.status = 'ACTIVE' as any;
+      if (startMileage) {
+        vehicle.currentOdometer = startMileage;
+      }
+      await vehicle.save();
+
+      res.status(201).json({ message: 'Trip started successfully', trip });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+app.put(
+  '/api/trips/:id',
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const { status, endMileage, notes } = req.body;
+
+      const trip = await Trip.findOne({ _id: id, companyId: req.user?.companyId });
+      if (!trip) {
+        return res.status(404).json({ message: 'Trip not found.' });
+      }
+
+      if (status) trip.status = status;
+      if (notes) trip.notes = notes;
+
+      if (status === 'COMPLETED') {
+        trip.actualEndTime = new Date();
+        if (endMileage) {
+          trip.endMileage = endMileage;
+          await Vehicle.findByIdAndUpdate(trip.vehicleId, {
+            currentOdometer: endMileage,
+            status: 'IDLE'
+          });
+        } else {
+          await Vehicle.findByIdAndUpdate(trip.vehicleId, { status: 'IDLE' });
+        }
+      } else if (status === 'CANCELLED') {
+        await Vehicle.findByIdAndUpdate(trip.vehicleId, { status: 'IDLE' });
+      }
+
+      await trip.save();
+      res.status(200).json({ message: 'Trip updated successfully', trip });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+app.get(
+  '/api/trips',
+  authenticate,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { vehicleId, driverId, status } = req.query;
+      const query: any = { companyId: req.user?.companyId };
+
+      if (vehicleId) query.vehicleId = vehicleId;
+      if (driverId) query.driverId = driverId;
+      if (status) query.status = status;
+
+      const trips = await Trip.find(query)
+        .populate('vehicleId', 'regNumber brand model')
+        .populate('driverId', 'name phone')
+        .populate('helperId', 'name phone')
+        .sort({ createdAt: -1 });
+
+      res.status(200).json({ trips });
     } catch (err) {
       next(err);
     }
