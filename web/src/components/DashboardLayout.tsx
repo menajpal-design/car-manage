@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import {
   Truck,
   LayoutDashboard,
@@ -121,7 +122,9 @@ export default function DashboardLayout({
       await apiRequest("/auth/logout", { method: "POST" });
     } catch {}
     localStorage.removeItem("owner_profile");
-    router.push("/login");
+    localStorage.removeItem("driver_profile");
+    localStorage.removeItem("assigned_vehicle");
+    window.location.href = "/login";
   };
 
   const markAllRead = () => {
@@ -231,12 +234,10 @@ export default function DashboardLayout({
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {navItems.map((item) => (
-            <button
+            <Link
               key={item.href}
-              onClick={() => {
-                router.push(item.href);
-                setSidebarOpen(false);
-              }}
+              href={item.href}
+              onClick={() => setSidebarOpen(false)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
                 isActive(item.href)
                   ? "bg-violet-600/15 text-violet-400 border border-violet-500/20"
@@ -254,7 +255,7 @@ export default function DashboardLayout({
               {isActive(item.href) && (
                 <ChevronRight className="h-3.5 w-3.5 text-violet-500" />
               )}
-            </button>
+            </Link>
           ))}
         </nav>
 
