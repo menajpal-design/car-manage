@@ -29,6 +29,15 @@ export async function apiRequest(path: string, options: RequestInit = {}) {
 
   const response = await fetch(url, mergedOptions);
 
+  if (response.status === 401) {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem("owner_profile");
+      localStorage.removeItem("driver_profile");
+      localStorage.removeItem("assigned_vehicle");
+      window.location.href = "/login";
+    }
+  }
+
   if (!response.ok) {
     let errorMsg = 'An unexpected error occurred';
     try {
