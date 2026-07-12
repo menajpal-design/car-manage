@@ -1,13 +1,7 @@
-import fs from 'fs';
-import path from 'path';
-
-const isImgBBConfigured = (): boolean => {
-  return !!process.env.IMGBB_API_KEY;
-};
+import { Media } from '../models/Media';
 
 /**
- * Uploads a file buffer to ImgBB (if it is an image and ImgBB is configured),
- * or saves it locally.
+ * Uploads a file buffer directly to MongoDB.
  * @param fileBuffer The binary data buffer.
  * @param originalName The file name.
  * @param mimeType The file content type.
@@ -21,51 +15,20 @@ export const uploadFile = async (
   const sanitizedName = originalName.replace(/\s+/g, '_');
   const uniqueName = `${Date.now()}_${sanitizedName}`;
 
-  // 1. If it's an image and ImgBB is configured, upload to ImgBB
-  if (isImgBBConfigured() && mimeType.startsWith('image/')) {
-    try {
-      console.log(`[ImgBB Upload] Uploading image: ${uniqueName}`);
-      const body = new URLSearchParams();
-      body.append('image', fileBuffer.toString('base64'));
+  console.log(`[MongoDB Storage] Saving file to database: ${uniqueName}`);
+  const media = new Media({
+    filename: uniqueName,
+    contentType: mimeType,
+    data: fileBuffer,
+  });
 
-      const response = await fetch(`https://api.imgbb.com/1/upload?key=${process.env.IMGBB_API_KEY}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: body.toString(),
-      });
-
-      if (!response.ok) {
-        throw new Error(`ImgBB upload failed with status ${response.status}`);
-      }
-
-      const resData: any = await response.json();
-      if (resData && resData.data && resData.data.url) {
-        console.log(`[ImgBB Upload] Uploaded image successfully: ${resData.data.url}`);
-        return resData.data.url;
-      } else {
-        throw new Error('Invalid response format from ImgBB');
-      }
-    } catch (error) {
-      console.error('[ImgBB Upload] Error uploading to ImgBB, falling back to local storage...', error);
-    }
-  }
-
-  // 2. Local storage fallback
-  const uploadDir = path.join(process.cwd(), 'uploads');
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-  }
-
-  const localPath = path.join(uploadDir, uniqueName);
-  fs.writeFileSync(localPath, fileBuffer);
-  console.log(`[Upload] Saved file locally: uploads/${uniqueName}`);
-  return `uploads/${uniqueName}`;
+  await media.save();
+  console.log(`[MongoDB Storage] Saved file to database successfully: api/media/${media._id}`);
+  return `api/media/${media._id}`;
 };
 
 /**
- * Returns a secure URL or the local file URL to view the file.
+ * Returns a secure URL to stream the file from MongoDB.
  * @param fileKey The identifier key/path/URL.
  * @returns The URL string.
  */
@@ -73,13 +36,16 @@ export const getSignedFileUrl = async (fileKey: string): Promise<string> => {
   if (fileKey.startsWith('http://') || fileKey.startsWith('https://')) {
     return fileKey;
   }
-  // Return mock host URL
+  // Return the resolved backend domain host URL
   const host = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
-  return `${host}/${fileKey}`;
+  
+  // Format the key to ensure there's a leading slash if not present
+  const relativePath = fileKey.startsWith('/') ? fileKey : `/${fileKey}`;
+  return `${host}${relativePath}`;
 };
 
 /**
- * Deletes a file from local storage, or skips if remote.
+ * Deletes a file from MongoDB.
  * @param fileKey The identifier key/path/URL.
  */
 export const deleteFile = async (fileKey: string): Promise<void> => {
@@ -87,11 +53,14 @@ export const deleteFile = async (fileKey: string): Promise<void> => {
     console.log(`[Delete File] Skipping deletion for remote URL: ${fileKey}`);
     return;
   }
-  // Delete local file
-  const filePath = path.join(process.cwd(), fileKey);
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
-    console.log(`[Delete File] Removed local file: ${filePath}`);
+
+  // Parse ID from the path (e.g. api/media/:id or /api/media/:id)
+  const parts = fileKey.split('/');
+  const id = parts[parts.length - 1];
+  
+  if (id && id.match(/^[0-9a-fA-F]{24}$/)) { // Verify it's a valid MongoDB ObjectId
+    console.log(`[MongoDB Storage] Deleting file from database: ${id}`);
+    await Media.findByIdAndDelete(id);
   }
 };
 

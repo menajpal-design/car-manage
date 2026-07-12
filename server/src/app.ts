@@ -25,6 +25,7 @@ import { Income } from './models/Income';
 import { LocationLog } from './models/LocationLog';
 import { Attendance } from './models/Attendance';
 import { Trip } from './models/Trip';
+import { Media } from './models/Media';
 import { authenticate } from './middleware/auth';
 import { authorize } from './middleware/rbac';
 import { sendSMS } from './services/sms';
@@ -109,6 +110,25 @@ if (!fs.existsSync(uploadsPath)) {
   fs.mkdirSync(uploadsPath, { recursive: true });
 }
 app.use('/uploads', express.static(uploadsPath));
+
+// Endpoint to stream media assets from MongoDB
+app.get('/api/media/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'Invalid media ID format.' });
+    }
+    const media = await Media.findById(id);
+    if (!media) {
+      return res.status(404).json({ message: 'Media not found.' });
+    }
+    res.setHeader('Content-Type', media.contentType);
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+    res.send(media.data);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // Socket.io Setup
 io.on('connection', (socket) => {
